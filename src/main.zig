@@ -1,27 +1,37 @@
 const std = @import("std");
 const NTop = @import("NTop");
+const clap = @import("clap");
+const windows = std.os.windows;
 
-pub extern fn cmain(argc: c_int, argv: [*c][*c]u8) c_int;
+pub extern fn cmain(windows.BOOL) c_int;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var arena = std.heap.ArenaAllocator.init(allocator);
-    defer arena.deinit();
-    const arena_allocator = arena.allocator();
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help                               Display this help info.
+        \\-C, --monochrome                         Use a monochrome color scheme.
+        \\-p, --pids <str>...                      Show only the given PIDs (comma-separated: PID,PID...).
+        \\-n, --names <str>...                     Show only processes containing at least one of the name parts (comma-separated).
+        \\-s, --sort <str>                         Sort by this column.
+        \\-u, --user <str>                         Display only processes of this user.
+        \\-d, --non-interactive                    Do not run in interactive mode.
+        \\-v, --version                            Print version.
+        \\
+    );
 
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+    var diag = clap.Diagnostic{};
+    var res = clap.parse(clap.Help, &params, clap.parsers.default, .{
+        .diagnostic = &diag,
+        .allocator = allocator,
+    }) catch |err| {
+        // try diag.reportToFile(stderr, err);
+        return err;
+    };
+    defer res.deinit();
 
-    const argv = try arena_allocator.alloc([*c]u8, args.len);
-
-    for (args, 0..) |arg, i| {
-        const c_arg = try arena_allocator.dupeZ(u8, arg);
-        argv[i] = c_arg.ptr;
-    }
-
-    const result = cmain(@intCast(args.len), argv.ptr);
+    const result = cmain(res.args.monochrome);
     std.process.exit(@intCast(result));
 }
