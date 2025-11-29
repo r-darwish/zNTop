@@ -19,6 +19,7 @@
 #define NTOP_H
 
 #include <tchar.h>
+#include <windows.h>
 
 #define DEFAULT_STR_SIZE 1024
 
@@ -51,4 +52,15 @@ typedef enum vi_message_type {
 void SetViMessage(vi_message_type MessageType, TCHAR *Fmt, ...);
 void ClearViMessage(void);
 
+typedef struct {
+    BOOL monochrome;
+    LPCSTR sort_by;
+    LPCSTR user_name;
+    BOOL non_interactive;
+    BOOL print_version;
+    DWORD *pid_filter;
+    size_t pid_filter_count;
+} args_t;
+
+int cmain(args_t *args);
 #endif

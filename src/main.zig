@@ -1,27 +1,66 @@
 const std = @import("std");
 const NTop = @import("NTop");
-
-pub extern fn cmain(argc: c_int, argv: [*c][*c]u8) c_int;
+const clap = @import("clap");
+const windows = std.os.windows;
+const c = @cImport({
+    @cInclude("ntop.h");
+});
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var arena = std.heap.ArenaAllocator.init(allocator);
-    defer arena.deinit();
-    const arena_allocator = arena.allocator();
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help                               Display this help info.
+        \\-C, --monochrome                         Use a monochrome color scheme.
+        \\-p, --pids <u32>...                      Show only the given PIDs (comma-separated: PID,PID...).
+        \\-n, --names <str>...                     Show only processes containing at least one of the name parts (comma-separated).
+        \\-s, --sort <str>                         Sort by this column.
+        \\-u, --user <str>                         Display only processes of this user.
+        \\-d, --noninteractive                    Do not run in interactive mode.
+        \\-v, --version                            Print version.
+        \\
+    );
 
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+    var diag = clap.Diagnostic{};
+    var res = clap.parse(clap.Help, &params, clap.parsers.default, .{
+        .diagnostic = &diag,
+        .allocator = allocator,
+    }) catch |err| {
+        // try diag.reportToFile(stderr, err);
+        return err;
+    };
+    defer res.deinit();
 
-    const argv = try arena_allocator.alloc([*c]u8, args.len);
+    var argsArena = std.heap.ArenaAllocator.init(allocator);
+    var arenaAllocator = argsArena.allocator();
+    var pidFilter: [*c]c_ulong = null;
 
-    for (args, 0..) |arg, i| {
-        const c_arg = try arena_allocator.dupeZ(u8, arg);
-        argv[i] = c_arg.ptr;
+    if (res.args.pids.len > 0) {
+        pidFilter = (try arenaAllocator.alloc(c_ulong, res.args.pids.len)).ptr;
+        for (res.args.pids, 0..) |pid, i| {
+            pidFilter[i] = pid;
+        }
     }
 
-    const result = cmain(@intCast(args.len), argv.ptr);
+    // if (res.args.pids.len > 0) {
+    //     pidFilter = (try arenaAllocator.alloc([*c]c_ulong, res.args.pids.len)).ptr;
+    //     for (res.args.pids, 0..) |pid, i| {
+    //         pidFilter[i] = arenaAllocator.dupeZ(u8, pid) catch @panic("allocation failed");
+    //     }
+    // // }
+    defer argsArena.deinit();
+    var cargs = c.args_t{
+        .monochrome = res.args.monochrome,
+        .sort_by = if (res.args.sort) |s| arenaAllocator.dupeZ(u8, s) catch null else null,
+        .user_name = if (res.args.user) |s| arenaAllocator.dupeZ(u8, s) catch null else null,
+        .non_interactive = res.args.noninteractive,
+        .print_version = res.args.version,
+        .pid_filter = pidFilter,
+        .pid_filter_count = res.args.pids.len,
+    };
+
+    const result = c.cmain(&cargs);
     std.process.exit(@intCast(result));
 }

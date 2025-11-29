@@ -1643,79 +1643,61 @@ static void ProcessInput(BOOL *Redraw)
 	free(Records);
 }
 
-int cmain(int argc, TCHAR *argv[])
+int cmain(args_t *args)
 {
-	BOOL Monochrome = FALSE;
-
 	/* Only set this temporarily for command-line processing */
 	ConsoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
 
-	for(int i = 1; i < argc; i++) {
-		if(argv[i][0] == _T('-') && _tcslen(argv[i]) == 2) {
-			switch(argv[i][1]) {
-			case _T('C'):
-				Monochrome = TRUE;
-				break;
-			case _T('h'):
-				PrintHelp(argv[0]);
-				return EXIT_SUCCESS;
-			case _T('s'):
-				if(++i < argc) {
-					if(!GetProcessSortTypeFromName(argv[i], &ProcessSortType)) {
-						ConPrintf(_T("Unknown column: '%s'\n"), argv[i]);
-						return EXIT_FAILURE;
-					}
-				}
-				break;
-			case _T('u'):
-				if(++i < argc) {
-					FilterByUserName = TRUE;
-					_tcscpy_s(FilterUserName, UNLEN, argv[i]);
-				}
-				break;
-			case _T('d'):
-				InteractiveMode = FALSE;
-				break;	
-			case _T('v'):
-				PrintVersion();
-				return EXIT_SUCCESS;
-			case _T('p'):
-				if(++i < argc) {
-					const TCHAR *Delim = _T(",");
-					TCHAR *Context;
-					TCHAR *Token = _tcstok_s(argv[i], Delim, &Context);
-					while(Token) {
-						PidFilterList[PidFilterCount++] = (DWORD)_tstoi(Token);
-						Token = _tcstok_s(0, Delim, &Context);
-					}
+	// for(int i = 1; i < argc; i++) {
+	// 	if(argv[i][0] == _T('-') && _tcslen(argv[i]) == 2) {
+	//      case _T('n'):
+	//          if(++i < argc) {
+	//            const TCHAR *Delim = _T(",");
+	//            TCHAR *Context;
+	//            TCHAR *Token = _tcstok_s(argv[i], Delim, &Context);
+	//            while(Token && NameFilterCount < MAX_NAMEPARTS) {
+	//              _tcsncpy_s(NameFilterList[NameFilterCount++], MAX_NAMEPARTSIZE+1, Token, MAX_NAMEPARTSIZE);
+	//              Token = _tcstok_s(0, Delim, &Context);
+	//            }
+	//
+	//            if (NameFilterCount != 0) {
+	//              FilterByName = TRUE;
+	//            }
+	//          }
+	//          break;
+	//
+	// 		default:
+	// 			ConPrintf(_T("Unknown option: '%c'"), argv[i][1]);
+	// 			return EXIT_FAILURE;
+	// 		}
+	// 	}
+	// }
+	//
 
-					if(PidFilterCount != 0) {
-						FilterByPID = TRUE;
-					}
-				}
-				break;
-      case _T('n'):
-          if(++i < argc) {
-            const TCHAR *Delim = _T(",");
-            TCHAR *Context;
-            TCHAR *Token = _tcstok_s(argv[i], Delim, &Context);
-            while(Token && NameFilterCount < MAX_NAMEPARTS) {
-              _tcsncpy_s(NameFilterList[NameFilterCount++], MAX_NAMEPARTSIZE+1, Token, MAX_NAMEPARTSIZE);
-              Token = _tcstok_s(0, Delim, &Context);
-            }
+    if (args->print_version) {
+        PrintVersion();
+        return EXIT_SUCCESS;
+    }
 
-            if (NameFilterCount != 0) {
-              FilterByName = TRUE;
-            }
-          }
-          break;
+    if(args->sort_by != NULL && !GetProcessSortTypeFromName(args->sort_by, &ProcessSortType)) {
+        ConPrintf(_T("Unknown column: '%s'\n"), args->sort_by);
+        return EXIT_FAILURE;
+    }
 
-			default:
-				ConPrintf(_T("Unknown option: '%c'"), argv[i][1]);
-				return EXIT_FAILURE;
-			}
-		}
-	}
+    if (args->user_name != NULL) {
+        FilterByUserName = TRUE;
+        _tcscpy_s(FilterUserName, UNLEN, args->user_name);
+    }
+
+    if (args->pid_filter_count > 0) {
+        for (int i = 0; i < args->pid_filter_count; i++) {
+            PidFilterList[i] = args->pid_filter[i];
+        }
+        PidFilterCount = args->pid_filter_count;
+        FilterByPID = TRUE;
+    }
+
+    InteractiveMode = !args->non_interactive;
 
 	InitializeCriticalSection(&SyncLock);
 	SetConsoleCtrlHandler(CtrlHandler, TRUE);
@@ -1741,7 +1723,7 @@ int cmain(int argc, TCHAR *argv[])
 		atexit(RestoreConsole);
 	}
 
-	if(Monochrome) {
+	if(args->monochrome) {
 		Config = MonochromeConfig;
 	} else {
 		ReadConfigFile();
