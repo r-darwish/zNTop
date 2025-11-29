@@ -1643,7 +1643,7 @@ static void ProcessInput(BOOL *Redraw)
 	free(Records);
 }
 
-int _tmain(int argc, TCHAR *argv[])
+int cmain(int argc, TCHAR *argv[])
 {
 	BOOL Monochrome = FALSE;
 
